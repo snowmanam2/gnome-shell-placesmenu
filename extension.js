@@ -7,6 +7,7 @@ const Panel = imports.ui.panel;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const PlaceDisplay = imports.ui.placeDisplay;
+const ShellMountOperation = imports.ui.shellMountOperation;
 const Params = imports.misc.params;
 const Shell = imports.gi.Shell;
 const GLib = imports.gi.GLib;
@@ -16,7 +17,7 @@ const Gtk = imports.gi.Gtk;
 const PLACE_ICON_SIZE = 22;
 const RECENT_NUMBER = 5;
 
-let button, restoreState = {};
+let button = null, restoreState = {};
 
 function PopupMenuIconItem() {
     this._init.apply(this, arguments);
@@ -132,6 +133,12 @@ PlacesMenuButton.prototype = {
         this._createBookmarks();
         this.menu.addMenuItem(this._bookMenu);
         
+        this._volumesMenu = new PopupMenu.PopupSubMenuMenuItem('Volumes');
+        this._createVolumes();
+        Main.placesManager.connect('mounts-updated',
+        	Lang.bind(this,function(){this._createVolumes();}));
+        this.menu.addMenuItem(this._volumesMenu);
+        
         this._mountMenu = new PopupMenu.PopupSubMenuMenuItem('Mounts');
         this._createMounts();
         Main.placesManager.connect('mounts-updated',
@@ -147,8 +154,7 @@ PlacesMenuButton.prototype = {
         
     },
  
- 	_addPlace : function(place, menu) 
- 	{
+ 	_addPlace : function(place, menu) {
         
         let icon = place.iconFactory(PLACE_ICON_SIZE);
         let item = new PopupMenuIconItem(place.name,icon);
@@ -158,8 +164,7 @@ PlacesMenuButton.prototype = {
         item.connect('activate', function(actor,event) {actor.place.launch();});
  	},
  	
- 	_addMount : function(place, menu) 
- 	{
+ 	_addMount : function(place, menu) {
         
 		//let icon = place.iconFactory(PLACE_ICON_SIZE);
 		let item = new PopupMenuButtonItem(place);
@@ -169,13 +174,29 @@ PlacesMenuButton.prototype = {
 		item.connect('activate', function(actor,event) {actor.place.launch();});
 	},
  
- 
- 	_addNoIconPlace : function(place, menu) 
- 	{
+ 	_addNoIconPlace : function(place, menu) {
         let item = new PopupMenu.PopupMenuItem(place.name);
         item.place = place;
         menu.addMenuItem(item);
         item.connect('activate', function(){});
+ 	},
+ 	
+ 	_addVolume : function (volume, menu) {
+ 	    let gicon = volume.get_icon();
+ 	    let icon = St.TextureCache.get_default().load_gicon(null, gicon, PLACE_ICON_SIZE);
+ 	    let item = new PopupMenuIconItem (volume.get_drive().get_name() + " : " + volume.get_name(), icon);
+ 	    item.volume = volume;
+ 	    menu.addMenuItem(item);
+ 	    item.connect('activate', Lang.bind(this, function(actor, event) {
+ 	        let m = actor.volume.get_mount();
+ 	        if (m) {
+ 	            let launcher = new PlaceDisplay.PlaceDeviceInfo(m);
+                launcher.launch();
+ 	        }
+ 	        else {
+ 	            this._mountVolume(actor.volume);
+ 	        }
+ 	    }));
  	},
  
     _createDefaultPlaces : function() {
@@ -262,6 +283,23 @@ PlacesMenuButton.prototype = {
         else this._bookMenu.actor.show();
     },
     
+    _createVolumes: function() {
+        this._volumesMenu.menu.removeAll();
+        let vm = Gio.VolumeMonitor.get();
+        
+        let drives = vm.get_connected_drives();
+        
+        for (let i = 0; i < drives.length; i++) {
+            let volumes = drives[i].get_volumes();
+            for (let j = 0; j < volumes.length; j++) {
+                if (volumes[j].can_mount()) {
+                    this._addVolume(volumes[j], this._volumesMenu.menu);
+                }
+            }
+        }
+        
+    },
+    
     _createMounts : function() {
     	this._mountMenu.menu.removeAll();
 		this.mountPlaces = Main.placesManager.getMounts();
@@ -325,6 +363,28 @@ PlacesMenuButton.prototype = {
     	    //this._recentList.actor.show();
         }
     },
+    
+    _mountVolume: function(volume) {
+        //let operation = new ShellMountOperation.ShellMountOperation(volume);
+        volume.mount(0, null, null,
+                     Lang.bind(this, this._onVolumeMounted));
+    },
+    
+    _onVolumeMounted: function (volume, res) {
+
+        try {
+            volume.mount_finish(res);
+            let launcher = new PlaceDisplay.PlaceDeviceInfo(volume.get_mount());
+            launcher.launch();
+        } catch (e) {
+            let string = e.toString();
+
+            if (string.indexOf('No key available with this passphrase') != -1)
+                this._reaskPassword(volume);
+            else
+                log('Unable to mount volume ' + volume.get_name() + ': ' + string);
+        }
+    },
       
     _launch: function(place) {
     	GLib.spawn_command_line_async ('nautilus '+place);
@@ -341,7 +401,7 @@ function PlacesMenuButton()
 }
 
 function init() {
-    button = new PlacesMenuButton();
+    
 }
 
 function enable() {
@@ -350,13 +410,19 @@ function enable() {
     //Main.panel._leftBox.remove_actor(restoreState["applicationMenu"]);  
 
     /* Place the menu */
+    button = new PlacesMenuButton();
+    
     Main.panel._leftBox.add(button.actor);
     Main.panel._menus.addMenu(button.menu); // Hack to make menu work ...
 }
 
 function disable() {
     /* Remove the extension menu */
-    Main.panel._leftBox.remove_actor(button.actor);
+    
+    if (button) {
+        Main.panel._leftBox.remove_actor(button.actor);
+        button = null;
+    }
 
     /* Restore Application Menu */
     //Main.panel._leftBox.add(restoreState["applicationMenu"]);  
