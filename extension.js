@@ -134,60 +134,69 @@ PlacesMenuButton.prototype = {
         let bookmarksPath = GLib.build_filenamev([GLib.get_home_dir(), '.gtk-bookmarks']);
         let bookmarksFile = Gio.file_new_for_path(bookmarksPath);
         this._mon = bookmarksFile.monitor_file(0, null);
-        this._mon.connect("changed", 
+        this._monChangedId = this._mon.connect("changed", 
             Lang.bind(this,function(){this._createBookmarks();}));
         this._createBookmarks();
         this.menu.addMenuItem(this._bookMenu);
         
         this._volumesMenu = new PopupMenu.PopupSubMenuMenuItem('Volumes');
         this._createVolumes();
-        Main.placesManager.connect('mounts-updated',
-            Lang.bind(this,function(){this._createVolumes();}));
+        this._mountsUpdatedId = Main.placesManager.connect('mounts-updated',
+            Lang.bind(this,function() {
+                this._createVolumes();
+                this._createMounts();
+            }
+        ));
         this.menu.addMenuItem(this._volumesMenu);
         
         this._mountMenu = new PopupMenu.PopupSubMenuMenuItem('Mounts');
         this._createMounts();
-        Main.placesManager.connect('mounts-updated',
-            Lang.bind(this,function(){this._createMounts();}));
         this.menu.addMenuItem(this._mountMenu);
         
         this._recentManager = Gtk.RecentManager.get_default();
         this._recentList = new PopupMenu.PopupSubMenuMenuItem('Recently Used');
-        this._recentManager.connect("changed", 
+        this._recentChangedId = this._recentManager.connect("changed", 
             Lang.bind(this,function(){this._buildRecentList();}));
         this._buildRecentList();
         this.menu.addMenuItem(this._recentList);
         
     },
+    
+    destroy : function() {
+        Main.placesManager.disconnect (this._mountsUpdatedId);
+        //this._recentManager.disconnect(this._recentChangedId);
+        //this._mon.disconnect(this._monChangedId);
+        
+        //this._mon.destroy();
+        //this._recentManager.destroy();    
+        PanelMenu.Button.prototype.destroy.call(this);
+    },
  
-     _addPlace : function(place, menu) {
+    _addPlace : function(place, menu) {
         
         let icon = place.iconFactory(PLACE_ICON_SIZE);
         let item = new PopupMenuIconItem(place.name,icon);
-        //item.addActor(icon, { align: St.Align.END });
         item.place = place;
         menu.addMenuItem(item);
         item.connect('activate', function(actor,event) {actor.place.launch();});
-     },
+    },
      
-     _addMount : function(place, menu) {
+    _addMount : function(place, menu) {
         
-        //let icon = place.iconFactory(PLACE_ICON_SIZE);
         let item = new PopupMenuButtonItem(place);
-        //item.addActor(icon, { align: St.Align.END });
         item.place = place;
         menu.addMenuItem(item);
         item.connect('activate', function(actor,event) {actor.place.launch();});
     },
  
-     _addNoIconPlace : function(place, menu) {
+    _addNoIconPlace : function(place, menu) {
         let item = new PopupMenu.PopupMenuItem(place.name);
         item.place = place;
         menu.addMenuItem(item);
         item.connect('activate', function(){});
-     },
+    },
      
-     _addVolume : function (volume, menu) {
+    _addVolume : function (volume, menu) {
          let gicon = volume.get_icon();
          let icon = St.TextureCache.get_default().load_gicon(null, gicon, PLACE_ICON_SIZE);
          let item = new PopupMenuIconItem (volume.get_drive().get_name() + " : " + volume.get_name(), icon);
@@ -203,7 +212,7 @@ PlacesMenuButton.prototype = {
                  this._mountVolume(actor.volume);
              }
          }));
-     },
+    },
  
     _createDefaultPlaces : function() {
         this.defaultPlaces = Main.placesManager.getDefaultPlaces();
@@ -414,7 +423,9 @@ function disable() {
     if (button) {
         Main.panel._leftBox.remove_actor (button.actor);
         Main.panel._menus.removeMenu (button.menu);
+        button.destroy();
         button = null;
     }
   
 }
+
