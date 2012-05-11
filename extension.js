@@ -163,7 +163,12 @@ PlacesMenuButton.prototype = {
     },
     
     destroy : function() {
-        Main.placesManager.disconnect (this._mountsUpdatedId);    
+        Main.placesManager.disconnect (this._mountsUpdatedId); 
+        
+        this._mon.disconnect(this._monChangedId);
+        this._mon.cancel();
+        this._recentManager.disconnect(this._recentChangedId);
+           
         PanelMenu.Button.prototype.destroy.call(this);
     },
  
