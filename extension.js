@@ -163,12 +163,7 @@ PlacesMenuButton.prototype = {
     },
     
     destroy : function() {
-        Main.placesManager.disconnect (this._mountsUpdatedId);
-        //this._recentManager.disconnect(this._recentChangedId);
-        //this._mon.disconnect(this._monChangedId);
-        
-        //this._mon.destroy();
-        //this._recentManager.destroy();    
+        Main.placesManager.disconnect (this._mountsUpdatedId);    
         PanelMenu.Button.prototype.destroy.call(this);
     },
  
@@ -220,6 +215,17 @@ PlacesMenuButton.prototype = {
         for (let placeid = 0; placeid < this.defaultPlaces.length; placeid++) {
             this._addPlace(this.defaultPlaces[placeid], this.menu);
         }
+        
+        let gicon = Shell.util_get_icon_for_uri("network:///");
+        let icon = St.TextureCache.get_default().load_gicon(null, gicon, PLACE_ICON_SIZE);
+        
+        let item = new PopupMenuIconItem ("Network", icon);
+        
+        this.menu.addMenuItem(item);
+        
+        item.connect('activate', Lang.bind(this, function(actor, event) {
+            GLib.spawn_command_line_async ("nautilus network:///");
+        }));
     }, 
     
     /* The existance of this function may warrant explanation. See, currently only LOCAL uris work in PlacesManager, 
