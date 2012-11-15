@@ -24,9 +24,10 @@ const GLib = imports.gi.GLib;
 const Gio = imports.gi.Gio;
 const Gtk = imports.gi.Gtk;
 
-// TODO: Put these in GSettings
-const PLACE_ICON_SIZE = 22;
-const RECENT_NUMBER = 5;
+const Extension = imports.misc.extensionUtils.getCurrentExtension();
+const Lib = Extension.imports.lib;
+
+let settings = Lib.getSettings();
 
 let button = null, restoreState = {};
 
@@ -65,7 +66,7 @@ PopupMenuButtonItem.prototype = {
         this.label = new St.Label({ text: place.name });
         this.addActor(this.label, { align: St.Align.START });
 
-        this.icon = place.iconFactory(PLACE_ICON_SIZE);
+        this.icon = place.iconFactory(settings.get_int ("place-icon-size"));
         if (this.icon != null) {
             this.icon.style_class = 'popup-menu-icon'; 
             this.addActor(this.icon);
@@ -160,6 +161,12 @@ PlacesMenuButton.prototype = {
         this._buildRecentList();
         this.menu.addMenuItem(this._recentList);
         
+        this._settingsChangedId = settings.connect('changed', Lang.bind(this, function (){ 
+            this._buildRecentList();
+            this._createVolumes();
+            this._createBookmarks();
+        }));
+        
     },
     
     destroy : function() {
@@ -168,13 +175,14 @@ PlacesMenuButton.prototype = {
         this._mon.disconnect(this._monChangedId);
         this._mon.cancel();
         this._recentManager.disconnect(this._recentChangedId);
+        settings.disconnect(this._settingsChangedId);
            
         PanelMenu.Button.prototype.destroy.call(this);
     },
  
     _addPlace : function(place, menu) {
         
-        let icon = place.iconFactory(PLACE_ICON_SIZE);
+        let icon = place.iconFactory(settings.get_int ("place-icon-size"));
         let item = new PopupMenuIconItem(place.name,icon);
         item.place = place;
         menu.addMenuItem(item);
@@ -198,7 +206,7 @@ PlacesMenuButton.prototype = {
      
     _addVolume : function (volume, menu) {
          let gicon = volume.get_icon();
-         let icon = St.TextureCache.get_default().load_gicon(null, gicon, PLACE_ICON_SIZE);
+         let icon = St.TextureCache.get_default().load_gicon(null, gicon, settings.get_int ("place-icon-size"));
          let item = new PopupMenuIconItem (volume.get_drive().get_name() + " : " + volume.get_name(), icon);
          item.volume = volume;
          menu.addMenuItem(item);
@@ -222,7 +230,7 @@ PlacesMenuButton.prototype = {
         }
         
         let gicon = Shell.util_get_icon_for_uri("network:///");
-        let icon = St.TextureCache.get_default().load_gicon(null, gicon, PLACE_ICON_SIZE);
+        let icon = St.TextureCache.get_default().load_gicon(null, gicon, settings.get_int ("place-icon-size"));
         
         let item = new PopupMenuIconItem ("Network", icon);
         
@@ -267,6 +275,8 @@ PlacesMenuButton.prototype = {
             if (bookmark == "") continue;
             
             if (bookmark.substring(0,4) != 'file') {
+                if (!settings.get_boolean('show-net-drives')) continue;
+            
                 let icon = Shell.util_get_icon_for_uri("network:///");
                 let item = new PlaceDisplay.PlaceInfo('bookmark:' + bookmark, label,
                 function(size) {
@@ -321,6 +331,8 @@ PlacesMenuButton.prototype = {
             }
         }
         
+        if (settings.get_boolean("show-volumes") && drives.length > 0) this._volumesMenu.actor.show();
+        else this._volumesMenu.actor.hide();
     },
     
     _createMounts : function() {
@@ -343,7 +355,7 @@ PlacesMenuButton.prototype = {
         let displayItems = [];
         
         items.sort(_sortRecentItem);
-        for (let i = 0; i < items.length && i < RECENT_NUMBER; i++) {
+        for (let i = 0; i < items.length && i < settings.get_int ("recent-number"); i++) {
             let uri = items[i].get_uri();
             let label = items[i].get_display_name();
             let icon = Shell.util_get_icon_for_uri(uri);
@@ -369,15 +381,17 @@ PlacesMenuButton.prototype = {
             Lang.bind(this,function(){this._recentManager.purge_items();}));
         this._recentList.menu.addMenuItem(clearitem);
         
-        if (items.length == 0) { 
+        if (items.length == 0 || !settings.get_boolean("show-recent")) { 
             this._recentList.actor.reactive = false;
             this._recentList.label.style_class = "inactive-label";
             this._recentList._triangle.style_class = "inactive-label"
+            this._recentList.actor.hide();
         }
         else { 
             this._recentList.actor.reactive = true;
             this._recentList.label.style_class = "default-label";
             this._recentList._triangle.style_class = "default-label";
+            this._recentList.actor.show();
         }
     },
     

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+	<schema id="org.gnome.shell.extensions.snowmanam2.placesmenu" path="/org/gnome/shell/extensions/snowmanam2/placesmenu/">
+		<key type="i" name="place-icon-size">
+			<default>22</default>
+			<summary>Size of icons in menu</summary>
+			<description/>
+		</key>
+		<key type="i" name="recent-number">
+			<default>5</default>
+			<summary>Number of recent items to show</summary>
+			<description/>
+		</key>
+		<key type="b" name="show-volumes">
+			<default>true</default>
+			<summary>Show the Volumes menu?</summary>
+			<description/>
+		</key>
+		<key type="b" name="show-net-drives">
+			<default>true</default>
+			<summary>Show Network Drive Bookmarks?</summary>
+			<description/>
+		</key>
+		<key type="b" name="show-recent">
+			<default>true</default>
+			<summary>Show Recent Items?</summary>
+			<description/>
+		</key>
+	</schema>
+</schemalist>
